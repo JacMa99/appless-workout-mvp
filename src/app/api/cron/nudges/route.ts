@@ -22,6 +22,11 @@ async function getUserDisplayNames(
 }
 
 export async function GET(req: NextRequest) {
+  console.log("CRON NUDGES ROUTE HIT", {
+    method: req.method,
+    url: req.url,
+  });
+
   try {
     const secret =
       req.nextUrl.searchParams.get("secret") ||
