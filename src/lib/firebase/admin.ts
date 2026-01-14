@@ -1,3 +1,4 @@
+throw new Error("ADMIN INIT TEST – should not load during debug");
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
