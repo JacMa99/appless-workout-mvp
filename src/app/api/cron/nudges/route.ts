@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import twilio from "twilio";
-import { adminDb } from "@/lib/firebase/admin";
+import type { Firestore } from "firebase-admin/firestore";
 import { nyDateKey, diffDays } from "@/lib/time/ny";
 
 export const runtime = "nodejs";
 
 async function getUserDisplayNames(
-  db: FirebaseFirestore.Firestore,
+  db: Firestore,
   uids: string[]
 ): Promise<Record<string, string>> {
   const refs = uids.map((uid) => db.collection("users").doc(uid));
@@ -30,12 +30,14 @@ export async function GET(req: NextRequest) {
   try {
     const secret =
       req.nextUrl.searchParams.get("secret") ||
-      req.headers.get("x-cron-secret");
+      req.headers.get("x-cron-secret") ||
+      "";
 
-    if (!secret || secret !== process.env.CRON_SECRET) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
+    // ---- DEBUG MODE (runs before Firebase Admin loads) ----
     const debug = req.nextUrl.searchParams.get("debug") === "1";
     if (debug) {
       const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64?.trim() || "";
@@ -55,7 +57,9 @@ export async function GET(req: NextRequest) {
         const pk = typeof obj?.private_key === "string" ? obj.private_key : "";
         hasPrivateKey = pk.includes("BEGIN");
         privateKeyHasLiteralSlashN = pk.includes("\\n");
-      } catch { }
+      } catch {
+        // intentionally swallow; we report booleans
+      }
 
       return NextResponse.json({
         ok: true,
@@ -71,21 +75,23 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // ---- Load Firebase Admin ONLY after secret/debug ----
+    const { adminDb } = await import("@/lib/firebase/admin");
+    const db: Firestore = adminDb;
 
+    // ---- Twilio env ----
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const fromNumber = process.env.TWILIO_FROM_NUMBER;
 
     if (!accountSid || !authToken || !fromNumber) {
       return NextResponse.json(
-        { error: "Missing Twilio env vars" },
+        { ok: false, error: "Missing Twilio env vars" },
         { status: 500 }
       );
     }
 
     const client = twilio(accountSid, authToken);
-    const db = adminDb;
-
     const today = nyDateKey();
 
     const groupsSnap = await db.collection("groups").get();
@@ -98,7 +104,6 @@ export async function GET(req: NextRequest) {
     let privateTriggered = 0;
     let privateDeduped = 0;
 
-
     for (const groupDoc of groupsSnap.docs) {
       const groupId = groupDoc.id;
       const group = groupDoc.data();
@@ -106,9 +111,10 @@ export async function GET(req: NextRequest) {
       const memberIds: string[] = Array.isArray(group.memberIds)
         ? group.memberIds
         : [];
+
       const memberPhones: Record<string, string> =
         group.memberPhones && typeof group.memberPhones === "object"
-          ? group.memberPhones
+          ? (group.memberPhones as Record<string, string>)
           : {};
 
       if (!memberIds.length) continue;
@@ -134,6 +140,8 @@ export async function GET(req: NextRequest) {
       });
 
       if (inactive3Plus.length > 0) {
+        groupTriggered += inactive3Plus.length;
+
         // Fetch display names once
         const namesMap = await getUserDisplayNames(db, inactive3Plus);
 
@@ -165,7 +173,7 @@ export async function GET(req: NextRequest) {
             });
 
             sent++;
-            groupSent++; // keep your debug counter if still present
+            groupSent++;
           }
 
           await groupNudgeRef.set(
@@ -181,6 +189,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      // ===== Private nudges: >=2 and <3 days inactive =====
       for (const uid of memberIds) {
         const phone = memberPhones[uid];
         if (!phone) continue;
@@ -258,3 +267,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function POST(req: NextRequest) {
+  return GET(req);
+}
