@@ -3,6 +3,8 @@ import twilio from "twilio";
 import { adminDb } from "@/lib/firebase/admin";
 import { nyDateKey, diffDays } from "@/lib/time/ny";
 
+export const runtime = "nodejs";
+
 async function getUserDisplayNames(
   db: FirebaseFirestore.Firestore,
   uids: string[]
@@ -28,6 +30,42 @@ export async function GET(req: NextRequest) {
     if (!secret || secret !== process.env.CRON_SECRET) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const debug = req.nextUrl.searchParams.get("debug") === "1";
+    if (debug) {
+      const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64?.trim() || "";
+
+      let b64DecodeOk = false;
+      let jsonParseOk = false;
+      let hasPrivateKey = false;
+      let privateKeyHasLiteralSlashN = false;
+
+      try {
+        const decoded = Buffer.from(b64.replace(/\s+/g, ""), "base64").toString("utf8");
+        b64DecodeOk = true;
+
+        const obj = JSON.parse(decoded);
+        jsonParseOk = true;
+
+        const pk = typeof obj?.private_key === "string" ? obj.private_key : "";
+        hasPrivateKey = pk.includes("BEGIN");
+        privateKeyHasLiteralSlashN = pk.includes("\\n");
+      } catch { }
+
+      return NextResponse.json({
+        ok: true,
+        debug: true,
+        node: process.version,
+        vercelEnv: process.env.VERCEL_ENV || null,
+        hasB64: Boolean(b64),
+        b64Len: b64.length,
+        b64DecodeOk,
+        jsonParseOk,
+        hasPrivateKey,
+        privateKeyHasLiteralSlashN,
+      });
+    }
+
 
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
