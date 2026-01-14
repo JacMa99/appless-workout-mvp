@@ -22,11 +22,6 @@ async function getUserDisplayNames(
 }
 
 export async function GET(req: NextRequest) {
-  console.log("CRON NUDGES ROUTE HIT", {
-    method: req.method,
-    url: req.url,
-  });
-
   try {
     const secret =
       req.nextUrl.searchParams.get("secret") ||
@@ -34,12 +29,17 @@ export async function GET(req: NextRequest) {
       "";
 
     if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
-    // ---- DEBUG MODE (runs before Firebase Admin loads) ----
+    // ---- DEBUG MODE (OFF by default in production) ----
     const debug = req.nextUrl.searchParams.get("debug") === "1";
-    if (debug) {
+    const allowDebug = process.env.ALLOW_CRON_DEBUG === "true";
+
+    if (debug && allowDebug) {
       const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64?.trim() || "";
 
       let b64DecodeOk = false;
@@ -48,17 +48,20 @@ export async function GET(req: NextRequest) {
       let privateKeyHasLiteralSlashN = false;
 
       try {
-        const decoded = Buffer.from(b64.replace(/\s+/g, ""), "base64").toString("utf8");
+        const decoded = Buffer.from(b64.replace(/\s+/g, ""), "base64").toString(
+          "utf8"
+        );
         b64DecodeOk = true;
 
         const obj = JSON.parse(decoded);
         jsonParseOk = true;
 
-        const pk = typeof obj?.private_key === "string" ? obj.private_key : "";
+        const pk =
+          typeof obj?.private_key === "string" ? (obj.private_key as string) : "";
         hasPrivateKey = pk.includes("BEGIN");
         privateKeyHasLiteralSlashN = pk.includes("\\n");
       } catch {
-        // intentionally swallow; we report booleans
+        // swallow; we report booleans
       }
 
       return NextResponse.json({
@@ -129,7 +132,9 @@ export async function GET(req: NextRequest) {
           .limit(1)
           .get();
 
-        lastLogs[uid] = snap.empty ? null : (snap.docs[0].get("dateKey") as string);
+        lastLogs[uid] = snap.empty
+          ? null
+          : (snap.docs[0].get("dateKey") as string);
       }
 
       // ===== Group nudges: for EACH member who is 3+ days inactive, text ALL members once/day (per inactive person) =====
@@ -154,7 +159,7 @@ export async function GET(req: NextRequest) {
           const groupNudgeSnap = await groupNudgeRef.get();
 
           if (groupNudgeSnap.exists && groupNudgeSnap.get("date") === today) {
-            continue; // already sent today's group message for this person
+            continue;
           }
 
           const body =
