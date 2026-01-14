@@ -1,4 +1,3 @@
-throw new Error("ADMIN INIT TEST – should not load during debug");
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
@@ -9,9 +8,13 @@ function initAdmin() {
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64?.trim();
 
   if (b64) {
-    // Remove any accidental whitespace that may have been pasted
     const clean = b64.replace(/\s+/g, "");
     const json = JSON.parse(Buffer.from(clean, "base64").toString("utf8"));
+
+    // ✅ CRITICAL: normalize private_key newlines if they came through as "\\n"
+    if (typeof json.private_key === "string") {
+      json.private_key = json.private_key.replace(/\\n/g, "\n");
+    }
 
     initializeApp({
       credential: cert(json),
