@@ -35,9 +35,6 @@ import {
     // create groupId first
     const groupRef = doc(collection(db, "groups"));
     const groupId = groupRef.id;
-  
-    // generate invite code (not guaranteed unique; good enough for MVP.
-    // We'll also query on join, so collisions are extremely unlikely.)
     const inviteCode = randomInviteCode(6);
   
     await setDoc(groupRef, {
@@ -49,22 +46,28 @@ import {
       createdAt: serverTimestamp(),
     });
   
+    // ✅ NEW: invite code lookup doc
+    await setDoc(doc(db, "invite_codes", inviteCode), {
+      groupId,
+      createdAt: serverTimestamp(),
+    });
+  
     // write user's groupId (enforces one-group MVP)
     await updateDoc(doc(db, "users", uid), { groupId });
   
     return { groupId, inviteCode };
-  }
+  }  
   
   export async function joinGroupByInviteCode(params: { inviteCode: string; uid: string }) {
     const { inviteCode, uid } = params;
   
-    const q = query(collection(db, "groups"), where("inviteCode", "==", inviteCode), limit(1));
-    const snap = await getDocs(q);
+    // ✅ Look up groupId from invite_codes (instead of querying groups)
+    const inviteRef = doc(db, "invite_codes", inviteCode);
+    const inviteSnap = await getDoc(inviteRef);
   
-    if (snap.empty) throw new Error("No group found for that invite code.");
+    if (!inviteSnap.exists()) throw new Error("No group found for that invite code.");
   
-    const groupDoc = snap.docs[0];
-    const groupId = groupDoc.id;
+    const { groupId } = inviteSnap.data() as { groupId: string };
   
     // add user to group
     await updateDoc(doc(db, "groups", groupId), {
@@ -75,7 +78,7 @@ import {
     await updateDoc(doc(db, "users", uid), { groupId });
   
     return { groupId };
-  }
+  }  
   
   export async function getGroup(groupId: string) {
     const ref = doc(db, "groups", groupId);

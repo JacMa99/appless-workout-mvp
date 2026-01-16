@@ -64,7 +64,9 @@ export default function HomePage() {
         </button>
       </div>
 
-      <Dashboard uid={user.uid} />
+      {/* ✅ UPDATED: pass groupId */}
+      <Dashboard uid={user.uid} groupId={userDoc.groupId} />
     </div>
   );
 }
+

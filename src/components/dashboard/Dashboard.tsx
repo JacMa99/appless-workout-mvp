@@ -13,12 +13,11 @@ import {
 } from "@/lib/firestore/workoutLogs";
 import { ContributionGraph } from "@/components/dashboard/ContributionGraph";
 
-
 const TYPES: WorkoutType[] = ["Lift", "Run", "Sport", "Mobility", "Other"];
 const EFFORTS: WorkoutEffort[] = ["Easy", "Medium", "Hard"];
 const DURATIONS: WorkoutDuration[] = [15, 30, 45, 60, 90];
 
-export function Dashboard({ uid }: { uid: string }) {
+export function Dashboard({ uid, groupId }: { uid: string; groupId: string }) {
   const todayKey = useMemo(() => nyDateKey(), []);
   const [busyLog, setBusyLog] = useState(false);
   const [recent, setRecent] = useState<Array<{ id: string } & WorkoutLog>>([]);
@@ -34,6 +33,7 @@ export function Dashboard({ uid }: { uid: string }) {
   async function refreshRecent() {
     const logs = await getRecentLogs(uid);
     setRecent(logs);
+
     const today = logs.find((l) => l.dateKey === todayKey);
     if (today) {
       setSelectedDateKey(today.dateKey);
@@ -41,6 +41,9 @@ export function Dashboard({ uid }: { uid: string }) {
       setEffort((today.effort as any) ?? "");
       setDuration((today.duration as any) ?? "");
       setNotes((today.notes as any) ?? "");
+    } else {
+      // if no log today, keep selected as today
+      setSelectedDateKey(todayKey);
     }
   }
 
@@ -53,8 +56,9 @@ export function Dashboard({ uid }: { uid: string }) {
     setError(null);
     setStatus(null);
     setBusyLog(true);
+
     try {
-      await logToday(uid);
+      await logToday(uid, groupId); // ✅ FIXED
       setStatus("Logged ✅");
       await refreshRecent();
     } catch (e: any) {
@@ -68,15 +72,18 @@ export function Dashboard({ uid }: { uid: string }) {
   async function onSaveDetails() {
     setError(null);
     setStatus(null);
+
     try {
       await updateWorkoutLog({
         uid,
+        groupId, // ✅ FIXED
         dateKey: selectedDateKey,
         type: type || undefined,
         effort: effort || undefined,
         duration: duration || undefined,
         notes: notes || undefined,
       });
+
       setStatus("Saved ✅");
       await refreshRecent();
     } catch (e: any) {
@@ -102,9 +109,7 @@ export function Dashboard({ uid }: { uid: string }) {
 
       <div className="mt-6 rounded-xl border p-4">
         <h2 className="font-semibold">Optional details</h2>
-        <p className="mt-1 text-xs text-gray-500">
-          These edit the same log doc (no duplicates).
-        </p>
+        <p className="mt-1 text-xs text-gray-500">These edit the same log doc (no duplicates).</p>
 
         <div className="mt-3 grid gap-3">
           <div>
@@ -144,7 +149,9 @@ export function Dashboard({ uid }: { uid: string }) {
             <select
               className="mt-1 w-full rounded-lg border px-3 py-2"
               value={duration as any}
-              onChange={(e) => setDuration((e.target.value ? Number(e.target.value) : "") as any)}
+              onChange={(e) =>
+                setDuration((e.target.value ? Number(e.target.value) : "") as any)
+              }
             >
               <option value="">—</option>
               {DURATIONS.map((d) => (
@@ -166,10 +173,7 @@ export function Dashboard({ uid }: { uid: string }) {
             />
           </div>
 
-          <button
-            onClick={onSaveDetails}
-            className="rounded-lg border px-4 py-2 hover:bg-gray-50"
-          >
+          <button onClick={onSaveDetails} className="rounded-lg border px-4 py-2 hover:bg-gray-50">
             Save details
           </button>
 
@@ -187,7 +191,8 @@ export function Dashboard({ uid }: { uid: string }) {
             <li key={l.id} className="flex items-center justify-between">
               <span className="font-mono">{l.dateKey}</span>
               <span className="text-gray-600">
-                {l.type ?? "—"} {l.duration ? `• ${l.duration}m` : ""} {l.effort ? `• ${l.effort}` : ""}
+                {l.type ?? "—"} {l.duration ? `• ${l.duration}m` : ""}{" "}
+                {l.effort ? `• ${l.effort}` : ""}
               </span>
             </li>
           ))}
@@ -196,5 +201,4 @@ export function Dashboard({ uid }: { uid: string }) {
       </div>
     </main>
   );
-
 }
