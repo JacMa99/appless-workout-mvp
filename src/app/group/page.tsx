@@ -47,15 +47,18 @@ export default function GroupPage() {
 
   // Load logs since Monday (for weekly stats + today)
   useEffect(() => {
+    if (!userDoc?.groupId) return;
+if (!group?.memberIds || group.memberIds.length === 0) return;
     if (!group?.memberIds || group.memberIds.length === 0) return;
 
     const since = weekKeys[0]; // Monday
-    getLogsForUsersSince(group.memberIds, since)
-      .then(setLogs)
-      .catch((e) => {
-        console.error(e);
-        setError("Failed to load logs.");
-      });
+getLogsForUsersSince(group.memberIds, userDoc.groupId, since)
+  .then(setLogs)
+  .catch((e) => {
+    console.error(e);
+    setError("Failed to load logs.");
+  });
+
   }, [group?.memberIds, weekKeys]);
 
   // ✅ Now conditional renders (after hooks)

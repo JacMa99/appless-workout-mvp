@@ -182,7 +182,7 @@ export function Dashboard({ uid, groupId }: { uid: string; groupId: string }) {
         </div>
       </div>
 
-      <ContributionGraph uid={uid} />
+      <ContributionGraph uid={uid} groupId={groupId} />
 
       <div className="mt-6 rounded-xl border p-4">
         <h2 className="font-semibold">Recent (last 14)</h2>

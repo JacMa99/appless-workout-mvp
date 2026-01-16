@@ -93,23 +93,30 @@ export async function getRecentLogs(uid: string) {
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as WorkoutLog) }));
 }
 
-export async function getLogsSince(uid: string, sinceDateKey: string) {
+export async function getLogsSince(uid: string, groupId: string, sinceDateKey: string) {
   const q = query(
     collection(db, "workout_logs"),
+    where("groupId", "==", groupId),
     where("uid", "==", uid),
     where("dateKey", ">=", sinceDateKey),
     orderBy("dateKey", "desc")
   );
 
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as WorkoutLog) }));
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
 }
 
-export async function getLogsForUsersSince(uids: string[], sinceDateKey: string) {
+
+export async function getLogsForUsersSince(
+  uids: string[],
+  groupId: string,
+  sinceDateKey: string
+) {
   if (uids.length === 0) return [];
 
   const q = query(
     collection(db, "workout_logs"),
+    where("groupId", "==", groupId),     // ✅ ADD THIS
     where("uid", "in", uids),
     where("dateKey", ">=", sinceDateKey),
     orderBy("dateKey", "desc")
@@ -118,3 +125,4 @@ export async function getLogsForUsersSince(uids: string[], sinceDateKey: string)
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as WorkoutLog) }));
 }
+

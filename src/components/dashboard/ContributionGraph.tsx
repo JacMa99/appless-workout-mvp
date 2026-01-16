@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getLogsSince } from "@/lib/firestore/workoutLogs";
 import { lastNDaysNyDateKeys } from "@/lib/time/nyRange";
 
-export function ContributionGraph({ uid }: { uid: string }) {
+export function ContributionGraph({ uid, groupId }: { uid: string; groupId: string }) {
   // 12 weeks ≈ 84 days
   const days = useMemo(() => lastNDaysNyDateKeys(84), []);
   const since = days[0];
@@ -15,7 +15,7 @@ export function ContributionGraph({ uid }: { uid: string }) {
   useEffect(() => {
     let cancelled = false;
 
-    getLogsSince(uid, since)
+    getLogsSince(uid, groupId, since)
       .then((logs) => {
         if (cancelled) return;
         setLoggedSet(new Set(logs.map((l) => l.dateKey)));
@@ -28,10 +28,8 @@ export function ContributionGraph({ uid }: { uid: string }) {
     return () => {
       cancelled = true;
     };
-  }, [uid, since]);
+  }, [uid, groupId, since]);
 
-  // Build 7 rows (Mon-Sun-ish isn’t critical for MVP graph; we just show last 84 days)
-  // We'll render as 12 columns x 7 rows by chunking into weeks.
   const weeks: string[][] = [];
   for (let i = 0; i < days.length; i += 7) {
     weeks.push(days.slice(i, i + 7));
@@ -41,7 +39,9 @@ export function ContributionGraph({ uid }: { uid: string }) {
     <div className="mt-6 rounded-xl border p-4">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">Last 12 weeks</h2>
-        <span className="text-xs text-gray-500">{days[0]} → {days[days.length - 1]}</span>
+        <span className="text-xs text-gray-500">
+          {days[0]} → {days[days.length - 1]}
+        </span>
       </div>
 
       {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
